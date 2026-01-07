@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pje": {
+      "command": "node",
+      "args": [
+        "/Users/rsbritto/MCP-PJE/pje-mcp-server/dist/index.js"
+      ],
+      "env": {
+        "PJE_USERNAME": "SEU_CPF_AQUI",
+        "PJE_PASSWORD": "SUA_SENHA_AQUI",
+        "PJE_ENDPOINT": "1G_CIVEL",
+        "BNP_API_URL": "https://bnp-sempj.cloud.pje.jus.br"
+      }
+    }
+  }
+}

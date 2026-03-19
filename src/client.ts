@@ -440,12 +440,22 @@ export class PJEMNIClient {
               const partType = ctMatch ? ctMatch[1].trim() : '';
 
               if (partType.includes('xop+xml') || partType.includes('text/xml')) {
-                // XML envelope - extract doc metadata
+                // XML envelope - extract metadata for the SPECIFIC requested document
                 const xml = body.toString('utf8');
-                const descMatch = xml.match(/descricao="([^"]+)"/);
-                const mimeMatch = xml.match(/mimetype="([^"]+)"/);
-                if (descMatch) docNome = descMatch[1];
-                if (mimeMatch) docMimetype = mimeMatch[1];
+                const docPattern = new RegExp(`idDocumento="${idDocumento}"[^>]*?(?:descricao="([^"]*)").*?(?:mimetype="([^"]*)")`, 's');
+                const docMatch = xml.match(docPattern);
+                if (docMatch) {
+                  if (docMatch[1]) docNome = docMatch[1];
+                  if (docMatch[2]) docMimetype = docMatch[2];
+                } else {
+                  // Fallback: try reversed attribute order
+                  const docPattern2 = new RegExp(`idDocumento="${idDocumento}"[^>]*?(?:mimetype="([^"]*)").*?(?:descricao="([^"]*)")`, 's');
+                  const docMatch2 = xml.match(docPattern2);
+                  if (docMatch2) {
+                    if (docMatch2[2]) docNome = docMatch2[2];
+                    if (docMatch2[1]) docMimetype = docMatch2[1];
+                  }
+                }
               } else if (!partType.includes('xml')) {
                 // Binary attachment - trim trailing whitespace
                 let clean = body;

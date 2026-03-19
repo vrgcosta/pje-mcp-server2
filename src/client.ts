@@ -60,6 +60,7 @@ export interface Documento {
   mimetype?: string;
   conteudo?: string;
   hash?: string;
+  vinculados?: Documento[];
 }
 
 export interface Precedente {
@@ -679,19 +680,30 @@ export class PJEMNIClient {
     if (!Array.isArray(documentos)) documentos = [documentos];
     return documentos.map((d: any) => {
       const attrs = d.attributes || d;
-      const conteudoPossivel =
-        d.conteudo || d.$value || d._ || d.texto ||
-        d.documentoVinculado?.conteudo || d.documentoVinculado?.$value ||
-        attrs.conteudo || null;
-      return {
+      const doc: Documento = {
         id: attrs.idDocumento || d.id || attrs.id,
         nome: attrs.descricao || d.nome || d.descricao,
         tipo: attrs.tipoDocumento || d.tipo,
-        dataInclusao: attrs.dataInclusao || d.dataInclusao,
+        dataInclusao: attrs.dataHora || attrs.dataInclusao || d.dataInclusao,
         mimetype: attrs.mimetype || d.mimetype || attrs.mimeType,
-        conteudo: conteudoPossivel,
         hash: attrs.hash || d.hash,
       };
+      // Parse documentos vinculados (hierarquia)
+      if (d.documentoVinculado) {
+        const vinc = Array.isArray(d.documentoVinculado) ? d.documentoVinculado : [d.documentoVinculado];
+        doc.vinculados = vinc.map((v: any) => {
+          const va = v.attributes || v;
+          return {
+            id: va.idDocumento || v.id,
+            nome: va.descricao || v.nome,
+            tipo: va.tipoDocumento || v.tipo,
+            dataInclusao: va.dataHora || va.dataInclusao,
+            mimetype: va.mimetype || v.mimetype,
+            hash: va.hash || v.hash,
+          };
+        });
+      }
+      return doc;
     });
   }
 

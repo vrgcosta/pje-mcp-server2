@@ -919,28 +919,51 @@
       return 'mime-other';
     }
 
+    function formatDate(d) {
+      if (!d || d.length < 8) return d || '-';
+      return d.substring(6,8)+'/'+d.substring(4,6)+'/'+d.substring(0,4);
+    }
+
+    function countAllDocs(docs) {
+      let total = 0, pdfs = 0, htmls = 0;
+      (docs||[]).forEach(d => {
+        total++; if (d.mimetype && d.mimetype.includes('pdf')) pdfs++; if (d.mimetype && d.mimetype.includes('html')) htmls++;
+        (d.vinculados||[]).forEach(v => {
+          total++; if (v.mimetype && v.mimetype.includes('pdf')) pdfs++; if (v.mimetype && v.mimetype.includes('html')) htmls++;
+        });
+      });
+      return {total, pdfs, htmls};
+    }
+
+    function docRow(doc, procNumero, indent) {
+      const mc = mimeClass(doc.mimetype);
+      const pad = indent ? 'padding-left:28px;' : '';
+      const prefix = indent ? '<span style="color:var(--border);margin-right:4px;">&#8627;</span>' : '';
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px;">${escapeHtml(doc.id || '?')}</td>
+        <td style="${pad}">${prefix}${escapeHtml(doc.nome || 'Sem nome')}</td>
+        <td><span class="mime-badge ${mc}">${escapeHtml(doc.mimetype || '?')}</span></td>
+        <td style="font-size:11px;">${formatDate(doc.dataInclusao)}</td>
+        <td><button class="btn-download" onclick="baixarDocumento('${procNumero}','${doc.id}','${escapeHtml(doc.nome||"doc")}')">Baixar</button></td>
+      </tr>`;
+    }
+
     function renderDocTable(docs, procNumero) {
       if (!docs || docs.length === 0) return '<p style="color:var(--text-muted);">Nenhum documento encontrado.</p>';
-      const pdfCount = docs.filter(d => d.mimetype && d.mimetype.includes('pdf')).length;
-      const htmlCount = docs.filter(d => d.mimetype && d.mimetype.includes('html')).length;
+      const c = countAllDocs(docs);
       let html = `<div class="doc-summary">
-        <div class="stat"><span class="stat-value">${docs.length}</span> documentos</div>
-        <div class="stat"><span class="stat-value">${pdfCount}</span> PDF</div>
-        <div class="stat"><span class="stat-value">${htmlCount}</span> HTML</div>
+        <div class="stat"><span class="stat-value">${c.total}</span> documentos</div>
+        <div class="stat"><span class="stat-value">${c.pdfs}</span> PDF</div>
+        <div class="stat"><span class="stat-value">${c.htmls}</span> HTML</div>
       </div>`;
       html += `<table class="doc-table"><thead><tr>
-        <th>#</th><th>ID</th><th>Nome</th><th>Tipo</th><th>Data</th><th>Acao</th>
+        <th>ID</th><th>Nome</th><th>Tipo</th><th>Data</th><th>Acao</th>
       </tr></thead><tbody>`;
-      docs.forEach((doc, i) => {
-        const mc = mimeClass(doc.mimetype);
-        html += `<tr>
-          <td>${i + 1}</td>
-          <td style="font-family:monospace;font-size:11px;">${escapeHtml(doc.id || '?')}</td>
-          <td>${escapeHtml(doc.nome || 'Sem nome')}</td>
-          <td><span class="mime-badge ${mc}">${escapeHtml(doc.mimetype || '?')}</span></td>
-          <td style="font-size:11px;">${doc.dataInclusao || '-'}</td>
-          <td><button class="btn-download" onclick="baixarDocumento('${procNumero}','${doc.id}','${escapeHtml(doc.nome||"doc")}')">Baixar</button></td>
-        </tr>`;
+      docs.forEach(doc => {
+        html += docRow(doc, procNumero, false);
+        (doc.vinculados||[]).forEach(v => {
+          html += docRow(v, procNumero, true);
+        });
       });
       html += '</tbody></table>';
       return html;

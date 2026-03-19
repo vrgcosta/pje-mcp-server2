@@ -326,6 +326,99 @@
     }
     .copy-btn:hover { color: var(--text); }
 
+    .doc-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .doc-table th {
+      text-align: left;
+      padding: 8px 10px;
+      background: var(--surface2);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .doc-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .doc-table tr:hover td { background: var(--surface); }
+
+    .doc-table .mime-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    .doc-table .mime-pdf { background: #ef444422; color: #f87171; }
+    .doc-table .mime-html { background: #3b82f622; color: #60a5fa; }
+    .doc-table .mime-other { background: #f59e0b22; color: #fbbf24; }
+
+    .doc-table .btn-download {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .doc-table .btn-download:hover { color: var(--text); border-color: var(--primary); }
+
+    .doc-summary {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .doc-summary .stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .doc-summary .stat-value {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .tab-bar button {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .tab-bar button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
     @media (max-width: 768px) {
       .layout { grid-template-columns: 1fr; }
       .sidebar {
@@ -489,7 +582,7 @@
       <!-- CONSULTAR PROCESSO PROFUNDA -->
       <div id="panel-processo-profunda" class="panel">
         <h2>Consulta Profunda (com Documentos)</h2>
-        <p class="desc">Retorna todos os metadados e conteudo binario dos documentos em base64.</p>
+        <p class="desc">Retorna todos os metadados e lista de documentos do processo.</p>
         <div class="card">
           <div class="form-row">
             <div class="form-group">
@@ -498,7 +591,21 @@
             </div>
           </div>
           <button class="btn btn-accent" onclick="consultarProfunda()">Consulta Profunda</button>
-          <div id="profundaResult" class="result-area">
+          <div id="profundaTabs" style="display:none; margin-top: 16px;">
+            <div class="tab-bar">
+              <button class="active" onclick="switchTab('profunda','docs',this)">Documentos</button>
+              <button onclick="switchTab('profunda','dados',this)">Dados do Processo</button>
+              <button onclick="switchTab('profunda','json',this)">JSON Bruto</button>
+            </div>
+            <div id="profunda-tab-docs" class="tab-content active"></div>
+            <div id="profunda-tab-dados" class="tab-content"></div>
+            <div id="profunda-tab-json" class="tab-content">
+              <div id="profundaResult" class="result-area">
+                <span class="placeholder">Informe o numero do processo e clique em Consulta Profunda.</span>
+              </div>
+            </div>
+          </div>
+          <div id="profundaLoading" class="result-area">
             <span class="placeholder">Informe o numero do processo e clique em Consulta Profunda.</span>
           </div>
         </div>
@@ -797,10 +904,145 @@
       }, 'processoResult');
     }
 
-    function consultarProfunda() {
+    function switchTab(group, tab, btn) {
+      const parent = btn.closest('.card');
+      parent.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById(group + '-tab-' + tab).classList.add('active');
+    }
+
+    function mimeClass(mime) {
+      if (!mime) return 'mime-other';
+      if (mime.includes('pdf')) return 'mime-pdf';
+      if (mime.includes('html')) return 'mime-html';
+      return 'mime-other';
+    }
+
+    function renderDocTable(docs, procNumero) {
+      if (!docs || docs.length === 0) return '<p style="color:var(--text-muted);">Nenhum documento encontrado.</p>';
+      const pdfCount = docs.filter(d => d.mimetype && d.mimetype.includes('pdf')).length;
+      const htmlCount = docs.filter(d => d.mimetype && d.mimetype.includes('html')).length;
+      let html = `<div class="doc-summary">
+        <div class="stat"><span class="stat-value">${docs.length}</span> documentos</div>
+        <div class="stat"><span class="stat-value">${pdfCount}</span> PDF</div>
+        <div class="stat"><span class="stat-value">${htmlCount}</span> HTML</div>
+      </div>`;
+      html += `<table class="doc-table"><thead><tr>
+        <th>#</th><th>ID</th><th>Nome</th><th>Tipo</th><th>Data</th><th>Acao</th>
+      </tr></thead><tbody>`;
+      docs.forEach((doc, i) => {
+        const mc = mimeClass(doc.mimetype);
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td style="font-family:monospace;font-size:11px;">${escapeHtml(doc.id || '?')}</td>
+          <td>${escapeHtml(doc.nome || 'Sem nome')}</td>
+          <td><span class="mime-badge ${mc}">${escapeHtml(doc.mimetype || '?')}</span></td>
+          <td style="font-size:11px;">${doc.dataInclusao || '-'}</td>
+          <td><button class="btn-download" onclick="baixarDocumento('${procNumero}','${doc.id}','${escapeHtml(doc.nome||"doc")}')">Baixar</button></td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function renderDadosProcesso(data) {
+      let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+      const fields = [
+        ['Numero', data.numero],
+        ['Classe', data.classe],
+        ['Orgao Julgador', data.orgaoJulgador],
+        ['Data Ajuizamento', data.dataAjuizamento],
+        ['Situacao', data.situacao],
+        ['Valor Causa', data.valorCausa ? 'R$ ' + Number(data.valorCausa).toLocaleString('pt-BR', {minimumFractionDigits:2}) : '-'],
+        ['Assuntos', (data.assuntos||[]).join(', ') || '-'],
+      ];
+      fields.forEach(([label, val]) => {
+        html += `<div class="endpoint-item"><div class="label">${label}</div><div class="value">${escapeHtml(String(val||'-'))}</div></div>`;
+      });
+      html += '</div>';
+      if (data.partes && data.partes.length > 0) {
+        html += '<h3 style="margin-top:16px;font-size:13px;color:var(--text-muted);">Partes</h3>';
+        html += '<table class="doc-table"><thead><tr><th>Polo</th><th>Nome</th><th>Documento</th><th>Advogados</th></tr></thead><tbody>';
+        data.partes.forEach(p => {
+          html += `<tr><td><span class="tag ${p.tipo==='ATIVO'?'tag-get':'tag-post'}">${escapeHtml(p.tipo)}</span></td>
+            <td>${escapeHtml(p.nome)}</td><td style="font-family:monospace;font-size:11px;">${escapeHtml(p.documento||'-')}</td>
+            <td style="font-size:11px;">${(p.advogados||[]).map(a=>escapeHtml(a)).join('<br>')}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      return html;
+    }
+
+    async function baixarDocumento(procNumero, docId, docNome) {
+      // Show loading on the button
+      const btns = document.querySelectorAll('.btn-download');
+      let btn = null;
+      btns.forEach(b => { if (b.getAttribute('onclick').includes(docId)) btn = b; });
+      if (btn) { btn.textContent = '...'; btn.disabled = true; }
+
+      try {
+        const resp = await fetch(API + '/api/baixar-documento', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({numeroProcesso: procNumero, idDocumento: docId}),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({mensagem: 'Erro ' + resp.status}));
+          alert('Erro ao baixar documento:\n' + (err.mensagem || err.erro || 'Erro desconhecido'));
+          return;
+        }
+
+        const blob = await resp.blob();
+        const ct = resp.headers.get('content-type') || '';
+        const cd = resp.headers.get('content-disposition') || '';
+        const fnMatch = cd.match(/filename="([^"]+)"/);
+        const filename = fnMatch ? fnMatch[1] : (docNome || 'documento');
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Erro ao baixar: ' + err.message);
+      } finally {
+        if (btn) { btn.textContent = 'Baixar'; btn.disabled = false; }
+      }
+    }
+
+    async function consultarProfunda() {
       const numero = document.getElementById('procProfundaNumero').value.trim();
-      if (!numero) return showError('profundaResult', 'Informe o numero do processo.');
-      apiCall('POST', '/api/consultar-processo-profunda', { numero }, 'profundaResult');
+      if (!numero) return;
+      const tabs = document.getElementById('profundaTabs');
+      const loading = document.getElementById('profundaLoading');
+      tabs.style.display = 'none';
+      loading.style.display = 'block';
+      loading.innerHTML = '<div class="loading"><div class="spinner"></div> Consultando processo com documentos...</div>';
+      const start = Date.now();
+      try {
+        const resp = await fetch(API + '/api/consultar-processo-profunda', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({numero}),
+        });
+        const data = await resp.json();
+        const elapsed = Date.now() - start;
+        if (data.erro) {
+          loading.innerHTML = `<pre style="color:var(--error);">${escapeHtml(data.mensagem)}</pre>`;
+          return;
+        }
+        // Render tabs
+        document.getElementById('profunda-tab-docs').innerHTML = renderDocTable(data.documentos, numero);
+        document.getElementById('profunda-tab-dados').innerHTML = renderDadosProcesso(data);
+        showResult('profundaResult', data, elapsed);
+        loading.style.display = 'none';
+        tabs.style.display = 'block';
+      } catch (err) {
+        loading.innerHTML = `<pre style="color:var(--error);">${escapeHtml(err.message)}</pre>`;
+      }
     }
 
     function consultarPorDocumento() {

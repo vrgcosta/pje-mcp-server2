@@ -5,6 +5,7 @@
 
 import * as soap from "soap";
 import axios from "axios";
+import https from "https";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -216,23 +217,16 @@ export class PJEMNIClient {
     this.validateCredentials();
     const client = await this.getIntercomunicacaoClient();
 
-    let incluirDocsParam: string | boolean = false;
-    if (opcoes?.incluirDocumentos === true) {
-      incluirDocsParam = '*';
-    } else if (typeof opcoes?.incluirDocumentos === 'string') {
-      incluirDocsParam = opcoes.incluirDocumentos;
-    }
-
     const params = {
       idConsultante: this.config.username,
       senhaConsultante: this.config.password,
       numeroProcesso,
       movimentos: opcoes?.movimentos ?? true,
       incluirCabecalho: opcoes?.incluirCabecalho ?? true,
-      incluirDocumentos: incluirDocsParam,
+      incluirDocumentos: opcoes?.incluirDocumentos === true || opcoes?.incluirDocumentos === '*' ? true : false,
     };
 
-    this.log(`Consultando processo: ${numeroProcesso} (incluirDocumentos: ${incluirDocsParam})`);
+    this.log(`Consultando processo: ${numeroProcesso} (incluirDocumentos: ${params.incluirDocumentos})`);
 
     try {
       const [result] = await client.consultarProcessoAsync(params);
@@ -264,7 +258,7 @@ export class PJEMNIClient {
       numeroProcesso,
       movimentos: true,
       incluirCabecalho: true,
-      incluirDocumentos: '*',
+      incluirDocumentos: true,
     };
 
     this.log(`Consultando processo profunda: ${numeroProcesso}`);
@@ -375,39 +369,121 @@ export class PJEMNIClient {
   }
 
   // ============================================
-  // Consulta Conteúdo de Documento
+  // Download de Documento via MTOM/XOP
   // ============================================
 
-  async consultarConteudoDocumento(numeroProcesso: string, idDocumento: string): Promise<Documento> {
+  async baixarDocumento(numeroProcesso: string, idDocumento: string): Promise<{ conteudo: Buffer; mimetype: string; nome: string }> {
     this.validateCredentials();
-    const client = await this.getIntercomunicacaoClient();
 
-    this.log(`Consultando conteúdo do documento ${idDocumento} do processo ${numeroProcesso}`);
+    this.log(`Baixando documento ${idDocumento} do processo ${numeroProcesso} via MTOM`);
 
+    // Build SOAP XML requesting specific document
+    const soapXml = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tns="http://www.cnj.jus.br/servico-intercomunicacao-2.2.2/" xmlns:ns2="http://www.cnj.jus.br/tipos-servico-intercomunicacao-2.2.2"><soap:Body><tns:consultarProcesso><idConsultante>${this.config.username}</idConsultante><senhaConsultante>${this.config.password}</senhaConsultante><numeroProcesso>${numeroProcesso.replace(/\D/g, '')}</numeroProcesso><movimentos>false</movimentos><incluirCabecalho>false</incluirCabecalho><incluirDocumentos>true</incluirDocumentos><documento>${idDocumento}</documento></tns:consultarProcesso></soap:Body></soap:Envelope>`;
+
+    const url = new URL(this.config.wsdlIntercomunicacao.replace('?wsdl', ''));
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: url.hostname,
+        port: 443,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': '""',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const buf = Buffer.concat(chunks);
+          const ct = res.headers['content-type'] || '';
+
+          if (!ct.includes('multipart')) {
+            // No MTOM - check for SOAP fault
+            const xml = buf.toString('utf8');
+            const faultMatch = xml.match(/<faultstring>([^<]+)<\/faultstring>/);
+            if (faultMatch) {
+              reject(new Error(`Erro SOAP: ${faultMatch[1]}`));
+              return;
+            }
+            reject(new Error('Resposta não contém attachment MTOM. O tribunal pode não suportar download de documentos.'));
+            return;
+          }
+
+          // Parse MTOM multipart
+          const bm = ct.match(/boundary="?([^"\s;]+)"?/);
+          if (!bm) { reject(new Error('Boundary não encontrado no Content-Type')); return; }
+          const boundary = '--' + bm[1];
+
+          // Extract document metadata from XML part
+          let docNome = 'documento';
+          let docMimetype = 'application/octet-stream';
+          let attachmentBuf: Buffer | null = null;
+
+          let idx = 0;
+          while (true) {
+            const start = buf.indexOf(boundary, idx);
+            if (start === -1) break;
+            const end = buf.indexOf(boundary, start + boundary.length);
+            if (end === -1) break;
+
+            const part = buf.slice(start + boundary.length + 2, end);
+            const hdrEnd = part.indexOf(Buffer.from([0x0d, 0x0a, 0x0d, 0x0a]));
+            if (hdrEnd > -1) {
+              const hdr = part.slice(0, hdrEnd).toString('utf8');
+              const body = part.slice(hdrEnd + 4);
+              const ctMatch = hdr.match(/Content-Type:\s*([^\r\n]+)/i);
+              const partType = ctMatch ? ctMatch[1].trim() : '';
+
+              if (partType.includes('xop+xml') || partType.includes('text/xml')) {
+                // XML envelope - extract doc metadata
+                const xml = body.toString('utf8');
+                const descMatch = xml.match(/descricao="([^"]+)"/);
+                const mimeMatch = xml.match(/mimetype="([^"]+)"/);
+                if (descMatch) docNome = descMatch[1];
+                if (mimeMatch) docMimetype = mimeMatch[1];
+              } else if (!partType.includes('xml')) {
+                // Binary attachment - trim trailing whitespace
+                let clean = body;
+                while (clean.length > 0 && (clean[clean.length - 1] === 0x0d || clean[clean.length - 1] === 0x0a)) {
+                  clean = clean.slice(0, clean.length - 1);
+                }
+                attachmentBuf = clean;
+              }
+            }
+            idx = end;
+          }
+
+          if (attachmentBuf && attachmentBuf.length > 0) {
+            this.log(`Documento baixado: ${docNome} (${docMimetype}, ${attachmentBuf.length} bytes)`);
+            resolve({ conteudo: attachmentBuf, mimetype: docMimetype, nome: docNome });
+          } else {
+            reject(new Error('Nenhum attachment binário encontrado na resposta MTOM'));
+          }
+        });
+      });
+
+      req.on('error', (e) => reject(new Error(`Erro HTTP: ${e.message}`)));
+      req.setTimeout(60000, () => { req.destroy(); reject(new Error('Timeout ao baixar documento')); });
+      req.write(soapXml);
+      req.end();
+    });
+  }
+
+  // Legacy method - now delegates to baixarDocumento
+  async consultarConteudoDocumento(numeroProcesso: string, idDocumento: string): Promise<Documento> {
     try {
-      if (typeof client.consultarDocumentoAsync === 'function') {
-        const params = {
-          idConsultante: this.config.username,
-          senhaConsultante: this.config.password,
-          numeroProcesso,
-          idDocumento,
-        };
-        const [result] = await client.consultarDocumentoAsync(params);
-        this.saveDebugFile(`documento_${idDocumento}_${Date.now()}.json`, result);
-        return this.parseDocumentoResponse(result);
-      }
-
-      const processo = await this.consultarProcessoProfunda(numeroProcesso);
-      if (processo.documentos && processo.documentos.length > 0) {
-        const documento = processo.documentos.find(d => d.id === idDocumento);
-        if (documento) return documento;
-        throw new Error(`Documento ${idDocumento} não encontrado no processo`);
-      }
-      throw new Error('Nenhum documento encontrado no processo');
+      const result = await this.baixarDocumento(numeroProcesso, idDocumento);
+      return {
+        id: idDocumento,
+        nome: result.nome,
+        mimetype: result.mimetype,
+        conteudo: result.conteudo.toString('base64'),
+      };
     } catch (error: any) {
-      if (error.message.includes('403')) {
-        throw new Error('Acesso negado (403). Seu IP pode não estar na whitelist.');
-      }
       throw new Error(`Erro ao consultar documento: ${error.message}`);
     }
   }

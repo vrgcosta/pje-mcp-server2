@@ -9,7 +9,10 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import * as dotenv from "dotenv";
 import { PJEMNIClient } from "./client.js";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,6 +183,25 @@ const server = http.createServer(async (req, res) => {
       }
       const documento = await client.consultarConteudoDocumento(body.numeroProcesso, body.idDocumento);
       jsonResponse(res, documento);
+      return;
+    }
+
+    if (pathname === "/api/baixar-documento" && req.method === "POST") {
+      const body = await parseBody(req);
+      if (!body.numeroProcesso || !body.idDocumento) {
+        errorResponse(res, "numeroProcesso e idDocumento são obrigatórios", 400);
+        return;
+      }
+      const result = await client.baixarDocumento(body.numeroProcesso, body.idDocumento);
+      const ext = result.mimetype.includes('pdf') ? '.pdf' : result.mimetype.includes('html') ? '.html' : '';
+      const filename = (result.nome || 'documento').replace(/[^a-zA-Z0-9._-]/g, '_') + (ext && !result.nome.endsWith(ext) ? ext : '');
+      res.writeHead(200, {
+        "Content-Type": result.mimetype,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Length": result.conteudo.length.toString(),
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(result.conteudo);
       return;
     }
 

@@ -667,12 +667,25 @@ export class PJEMNIClient {
   private parseMovimentacoes(movimentos: any): Movimentacao[] {
     if (!movimentos) return [];
     if (!Array.isArray(movimentos)) movimentos = [movimentos];
-    return movimentos.map((m: any) => ({
-      data: m.dataHora || m.data,
-      descricao: m.movimentoLocal?.descricao || m.descricao || m.complemento || 'N/A',
-      tipo: m.movimentoNacional?.descricao || m.tipo,
-      codigo: m.movimentoNacional?.codigoNacional || m.codigo,
-    }));
+    return movimentos.map((m: any) => {
+      const attrs = m.attributes || m;
+      const movNac = m.movimentoNacional || {};
+      const movNacAttrs = movNac.attributes || movNac;
+      const movLocal = m.movimentoLocal || {};
+
+      // Complemento can be string or array
+      let complemento = movNac.complemento || movLocal.complemento || m.complemento;
+      if (Array.isArray(complemento)) complemento = complemento.join(' - ');
+
+      const descricao = movLocal.descricao || complemento || movNac.descricao || m.descricao || 'N/A';
+
+      return {
+        data: attrs.dataHora || m.dataHora || m.data,
+        descricao,
+        tipo: movNacAttrs.descricao || movNac.descricao || m.tipo,
+        codigo: movNacAttrs.codigoNacional || movNac.codigoNacional || m.codigo,
+      };
+    });
   }
 
   private parseDocumentos(documentos: any): Documento[] {

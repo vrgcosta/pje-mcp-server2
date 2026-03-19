@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "dev:web": "tsx src/dev-server.ts",
     "clean": "rm -rf dist",
     "prepare": "npm run build"
   },
@@ -27,6 +28,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "axios": "^1.6.0",
+    "dotenv": "^17.3.1",
     "soap": "^1.0.0"
   },
   "devDependencies": {

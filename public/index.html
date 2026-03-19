@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PJE MNI Dev Console</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --border: #475569;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --accent: #8b5cf6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header h1 span { color: var(--primary); }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.connected { background: #16a34a22; color: var(--success); border: 1px solid #16a34a44; }
+    .status-badge.disconnected { background: #ef444422; color: var(--error); border: 1px solid #ef444444; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      height: calc(100vh - 53px);
+    }
+
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px 0;
+    }
+
+    .sidebar h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      padding: 0 16px;
+      margin-bottom: 8px;
+      margin-top: 16px;
+    }
+
+    .sidebar h3:first-child { margin-top: 0; }
+
+    .sidebar button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+    }
+
+    .sidebar button:hover { background: var(--surface2); color: var(--text); }
+    .sidebar button.active { background: var(--primary); color: white; }
+    .sidebar button .icon { font-size: 16px; width: 20px; text-align: center; }
+
+    .main {
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .panel {
+      display: none;
+      max-width: 900px;
+    }
+
+    .panel.active { display: block; }
+
+    .panel h2 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .panel .desc {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: var(--text-muted);
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .form-group label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    input, select, textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+    }
+
+    input[type="password"] {
+      font-family: monospace;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-success { background: var(--success); color: white; }
+    .btn-accent { background: var(--accent); color: white; }
+    .btn-outline {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .btn-outline:hover { border-color: var(--text); color: var(--text); }
+
+    .result-area {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      max-height: 600px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .result-area pre {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .result-area .placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 13px;
+    }
+
+    .loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary);
+      font-size: 13px;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .tag-get { background: #22c55e22; color: var(--success); }
+    .tag-post { background: #3b82f622; color: var(--primary); }
+
+    .timer {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .endpoint-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .endpoint-item {
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .endpoint-item .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .endpoint-item .value {
+      font-size: 13px;
+      font-family: monospace;
+      word-break: break-all;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--primary);
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .result-header .title { font-size: 13px; color: var(--text-muted); }
+
+    .copy-btn {
+      background: var(--surface2);
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { color: var(--text); }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-right: none;
+        border-top: 1px solid var(--border);
+        display: flex;
+        overflow-x: auto;
+        padding: 0;
+        z-index: 100;
+      }
+      .sidebar h3 { display: none; }
+      .sidebar button { padding: 12px; justify-content: center; min-width: 60px; }
+      .sidebar button span:not(.icon) { display: none; }
+      .main { padding-bottom: 70px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>PJE</span> MNI Dev Console</h1>
+    <div>
+      <span id="statusBadge" class="status-badge disconnected">Desconectado</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar">
+      <h3>Configuracao</h3>
+      <button class="active" data-panel="config">
+        <span class="icon">&#9881;</span>
+        <span>Credenciais</span>
+      </button>
+      <button data-panel="status">
+        <span class="icon">&#9889;</span>
+        <span>Status / Conexao</span>
+      </button>
+
+      <h3>Consultas</h3>
+      <button data-panel="processo">
+        <span class="icon">&#128196;</span>
+        <span>Por Numero</span>
+      </button>
+      <button data-panel="processo-profunda">
+        <span class="icon">&#128269;</span>
+        <span>Profunda (Docs)</span>
+      </button>
+      <button data-panel="por-documento">
+        <span class="icon">&#128100;</span>
+        <span>Por CPF/CNPJ</span>
+      </button>
+      <button data-panel="por-nome">
+        <span class="icon">&#128101;</span>
+        <span>Por Nome</span>
+      </button>
+      <button data-panel="documento">
+        <span class="icon">&#128195;</span>
+        <span>Documento</span>
+      </button>
+
+      <h3>Comunicacoes</h3>
+      <button data-panel="avisos">
+        <span class="icon">&#128276;</span>
+        <span>Avisos Pendentes</span>
+      </button>
+      <button data-panel="teor">
+        <span class="icon">&#128172;</span>
+        <span>Teor Comunicacao</span>
+      </button>
+
+      <h3>Precedentes</h3>
+      <button data-panel="precedentes">
+        <span class="icon">&#9878;</span>
+        <span>BNP (CNJ)</span>
+      </button>
+    </nav>
+
+    <main class="main">
+
+      <!-- CONFIG -->
+      <div id="panel-config" class="panel active">
+        <h2>Credenciais e Endpoint</h2>
+        <p class="desc">Configure o CPF, senha e endpoint do PJE para autenticar nas chamadas MNI.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>CPF (apenas numeros)</label>
+              <input type="text" id="cfgUsername" placeholder="00000000000" maxlength="11">
+            </div>
+            <div class="form-group">
+              <label>Senha</label>
+              <input type="password" id="cfgPassword" placeholder="Sua senha do PJE">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Endpoint (Base URL)</label>
+              <select id="cfgEndpoint">
+                <option value="https://pje.tjba.jus.br">1G Civel - pje.tjba.jus.br</option>
+                <option value="https://pje.tjba.jus.br">1G Criminal - pje.tjba.jus.br</option>
+                <option value="https://pje2g-mni.tjba.jus.br">2G - pje2g-mni.tjba.jus.br</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="salvarCredenciais()">Salvar Credenciais</button>
+          <span id="cfgResult" style="margin-left: 12px; font-size: 13px;"></span>
+        </div>
+      </div>
+
+      <!-- STATUS -->
+      <div id="panel-status" class="panel">
+        <h2>Status e Conexao</h2>
+        <p class="desc">Verifique o status do servidor e teste a conexao SOAP com o MNI.</p>
+        <div class="card">
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <button class="btn btn-primary" onclick="apiCall('GET', '/api/status', null, 'statusResult')">Ver Status</button>
+            <button class="btn btn-success" onclick="apiCall('POST', '/api/testar-conexao', {}, 'statusResult')">Testar Conexao</button>
+            <button class="btn btn-accent" onclick="apiCall('GET', '/api/listar-metodos', null, 'statusResult')">Listar Metodos</button>
+          </div>
+          <div id="statusResult" class="result-area">
+            <span class="placeholder">Clique em um botao acima para ver os resultados.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSULTAR PROCESSO -->
+      <div id="panel-processo" class="panel">
+        <h2>Consultar Processo por Numero</h2>
+        <p class="desc">Consulta basica de processo via MNI. Retorna dados gerais, partes e movimentacoes.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Numero do Processo (CNJ)</label>
+              <input type="text" id="procNumero" placeholder="0000000-00.0000.0.00.0000">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="checkbox-row">
+              <input type="checkbox" id="procMovimentos" checked>
+              <label for="procMovimentos">Movimentos</label>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="procCabecalho" checked>
+              <label for="procCabecalho">Cabecalho</label>
+            </div>
+            <div class="checkbox-row">
+              <input type="checkbox" id="procDocumentos">
+              <label for="procDocumentos">Documentos</label>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="consultarProcesso()">Consultar</button>
+          <div id="processoResult" class="result-area">
+            <span class="placeholder">Informe o numero do processo e clique em Consultar.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSULTAR PROCESSO PROFUNDA -->
+      <div id="panel-processo-profunda" class="panel">
+        <h2>Consulta Profunda (com Documentos)</h2>
+        <p class="desc">Retorna todos os metadados e conteudo binario dos documentos em base64.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Numero do Processo (CNJ)</label>
+              <input type="text" id="procProfundaNumero" placeholder="0000000-00.0000.0.00.0000">
+            </div>
+          </div>
+          <button class="btn btn-accent" onclick="consultarProfunda()">Consulta Profunda</button>
+          <div id="profundaResult" class="result-area">
+            <span class="placeholder">Informe o numero do processo e clique em Consulta Profunda.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- POR DOCUMENTO -->
+      <div id="panel-por-documento" class="panel">
+        <h2>Consultar por CPF / CNPJ</h2>
+        <p class="desc">Busca processos de uma parte pelo numero do documento.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>CPF ou CNPJ</label>
+              <input type="text" id="docNumero" placeholder="000.000.000-00">
+            </div>
+            <div class="form-group" style="max-width: 100px;">
+              <label>Pagina</label>
+              <input type="number" id="docPagina" value="1" min="1">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="consultarPorDocumento()">Consultar</button>
+          <div id="documentoSearchResult" class="result-area">
+            <span class="placeholder">Informe o CPF ou CNPJ.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- POR NOME -->
+      <div id="panel-por-nome" class="panel">
+        <h2>Consultar por Nome da Parte</h2>
+        <p class="desc">Busca processos pelo nome da parte envolvida.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nome da Parte</label>
+              <input type="text" id="nomeQuery" placeholder="Nome completo ou parcial">
+            </div>
+            <div class="form-group" style="max-width: 150px;">
+              <label>Tipo Parte</label>
+              <select id="nomeTipoParte">
+                <option value="TODOS">Todos</option>
+                <option value="AUTOR">Autor</option>
+                <option value="REU">Reu</option>
+              </select>
+            </div>
+            <div class="form-group" style="max-width: 100px;">
+              <label>Pagina</label>
+              <input type="number" id="nomePagina" value="1" min="1">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="consultarPorNome()">Consultar</button>
+          <div id="nomeResult" class="result-area">
+            <span class="placeholder">Informe o nome da parte.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOCUMENTO -->
+      <div id="panel-documento" class="panel">
+        <h2>Conteudo de Documento</h2>
+        <p class="desc">Obtem o conteudo de um documento especifico de um processo.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Numero do Processo</label>
+              <input type="text" id="docProcNumero" placeholder="0000000-00.0000.0.00.0000">
+            </div>
+            <div class="form-group">
+              <label>ID do Documento</label>
+              <input type="text" id="docId" placeholder="ID retornado na consulta">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="consultarConteudoDoc()">Buscar Documento</button>
+          <div id="docResult" class="result-area">
+            <span class="placeholder">Informe o processo e ID do documento.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AVISOS -->
+      <div id="panel-avisos" class="panel">
+        <h2>Avisos / Intimacoes Pendentes</h2>
+        <p class="desc">Lista as intimacoes pendentes para o usuario autenticado.</p>
+        <div class="card">
+          <button class="btn btn-primary" onclick="apiCall('POST', '/api/consultar-avisos', {}, 'avisosResult')">Buscar Avisos</button>
+          <div id="avisosResult" class="result-area">
+            <span class="placeholder">Clique para buscar avisos pendentes.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEOR COMUNICACAO -->
+      <div id="panel-teor" class="panel">
+        <h2>Teor da Comunicacao</h2>
+        <p class="desc">Obtem o teor completo de uma comunicacao/intimacao.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Identificador do Aviso</label>
+              <input type="text" id="teorId" placeholder="ID do aviso">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="consultarTeor()">Buscar Teor</button>
+          <div id="teorResult" class="result-area">
+            <span class="placeholder">Informe o identificador do aviso.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRECEDENTES -->
+      <div id="panel-precedentes" class="panel">
+        <h2>Banco Nacional de Precedentes (BNP)</h2>
+        <p class="desc">Consulta precedentes judiciais no BNP do CNJ.</p>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Termo de Busca</label>
+              <input type="text" id="bnpTermo" placeholder="Ex: plano de saude cobertura">
+            </div>
+            <div class="form-group" style="max-width: 150px;">
+              <label>Tribunal</label>
+              <input type="text" id="bnpTribunal" placeholder="Ex: TJBA">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="max-width: 150px;">
+              <label>Especie</label>
+              <select id="bnpEspecie">
+                <option value="">Todas</option>
+                <option value="SUMULA">Sumula</option>
+                <option value="REPERCUSSAO_GERAL">Repercussao Geral</option>
+                <option value="RECURSO_REPETITIVO">Recurso Repetitivo</option>
+              </select>
+            </div>
+            <div class="form-group" style="max-width: 160px;">
+              <label>Data Inicio</label>
+              <input type="date" id="bnpDataInicio">
+            </div>
+            <div class="form-group" style="max-width: 160px;">
+              <label>Data Fim</label>
+              <input type="date" id="bnpDataFim">
+            </div>
+          </div>
+          <button class="btn btn-accent" onclick="consultarPrecedentes()">Buscar Precedentes</button>
+          <div id="precedentesResult" class="result-area">
+            <span class="placeholder">Informe o termo de busca.</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const API = '';
+    let lastResultId = null;
+
+    // Navigation
+    document.querySelectorAll('.sidebar button[data-panel]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+      });
+    });
+
+    function showLoading(resultId) {
+      const el = document.getElementById(resultId);
+      el.innerHTML = '<div class="loading"><div class="spinner"></div> Aguardando resposta do MNI...</div>';
+      lastResultId = resultId;
+    }
+
+    function showResult(resultId, data, elapsed) {
+      const el = document.getElementById(resultId);
+      const json = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      el.innerHTML = `
+        <div class="result-header">
+          <span class="title">Resposta${elapsed ? ` <span class="timer">(${elapsed}ms)</span>` : ''}</span>
+          <button class="copy-btn" onclick="copyResult(this)">Copiar</button>
+        </div>
+        <pre>${syntaxHighlight(json)}</pre>
+      `;
+    }
+
+    function showError(resultId, msg, elapsed) {
+      const el = document.getElementById(resultId);
+      el.innerHTML = `
+        <div class="result-header">
+          <span class="title" style="color: var(--error);">Erro${elapsed ? ` <span class="timer">(${elapsed}ms)</span>` : ''}</span>
+        </div>
+        <pre style="color: var(--error);">${escapeHtml(msg)}</pre>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function syntaxHighlight(json) {
+      json = escapeHtml(json);
+      return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        function (match) {
+          let cls = 'color: #f59e0b'; // number
+          if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+              cls = 'color: #60a5fa'; // key
+            } else {
+              cls = 'color: #34d399'; // string
+            }
+          } else if (/true|false/.test(match)) {
+            cls = 'color: #c084fc'; // bool
+          } else if (/null/.test(match)) {
+            cls = 'color: #f87171'; // null
+          }
+          return '<span style="' + cls + '">' + match + '</span>';
+        }
+      );
+    }
+
+    function copyResult(btn) {
+      const pre = btn.closest('.result-area').querySelector('pre');
+      if (pre) {
+        navigator.clipboard.writeText(pre.textContent);
+        btn.textContent = 'Copiado!';
+        setTimeout(() => btn.textContent = 'Copiar', 1500);
+      }
+    }
+
+    async function apiCall(method, url, body, resultId) {
+      showLoading(resultId);
+      const start = Date.now();
+      try {
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body && method !== 'GET') opts.body = JSON.stringify(body);
+        const resp = await fetch(API + url, opts);
+        const data = await resp.json();
+        const elapsed = Date.now() - start;
+
+        if (data.erro || resp.status >= 400) {
+          showError(resultId, data.mensagem || JSON.stringify(data), elapsed);
+        } else {
+          showResult(resultId, data, elapsed);
+          // Update status badge on successful connection test
+          if (url === '/api/testar-conexao' && data.sucesso) {
+            document.getElementById('statusBadge').className = 'status-badge connected';
+            document.getElementById('statusBadge').textContent = 'Conectado';
+          }
+        }
+      } catch (err) {
+        showError(resultId, err.message, Date.now() - start);
+      }
+    }
+
+    async function salvarCredenciais() {
+      const username = document.getElementById('cfgUsername').value.trim();
+      const password = document.getElementById('cfgPassword').value;
+      const baseUrl = document.getElementById('cfgEndpoint').value;
+      const resultSpan = document.getElementById('cfgResult');
+
+      if (!username || !password) {
+        resultSpan.style.color = 'var(--error)';
+        resultSpan.textContent = 'Preencha CPF e senha.';
+        return;
+      }
+
+      try {
+        const resp = await fetch(API + '/api/credenciais', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, baseUrl }),
+        });
+        const data = await resp.json();
+        if (data.sucesso) {
+          resultSpan.style.color = 'var(--success)';
+          resultSpan.textContent = 'Credenciais salvas com sucesso!';
+        } else {
+          resultSpan.style.color = 'var(--error)';
+          resultSpan.textContent = data.mensagem || 'Erro ao salvar';
+        }
+      } catch (err) {
+        resultSpan.style.color = 'var(--error)';
+        resultSpan.textContent = err.message;
+      }
+    }
+
+    function consultarProcesso() {
+      const numero = document.getElementById('procNumero').value.trim();
+      if (!numero) return showError('processoResult', 'Informe o numero do processo.');
+      apiCall('POST', '/api/consultar-processo', {
+        numero,
+        movimentos: document.getElementById('procMovimentos').checked,
+        incluirCabecalho: document.getElementById('procCabecalho').checked,
+        incluirDocumentos: document.getElementById('procDocumentos').checked,
+      }, 'processoResult');
+    }
+
+    function consultarProfunda() {
+      const numero = document.getElementById('procProfundaNumero').value.trim();
+      if (!numero) return showError('profundaResult', 'Informe o numero do processo.');
+      apiCall('POST', '/api/consultar-processo-profunda', { numero }, 'profundaResult');
+    }
+
+    function consultarPorDocumento() {
+      const documento = document.getElementById('docNumero').value.trim();
+      if (!documento) return showError('documentoSearchResult', 'Informe o CPF ou CNPJ.');
+      apiCall('POST', '/api/consultar-por-documento', {
+        documento,
+        pagina: parseInt(document.getElementById('docPagina').value) || 1,
+      }, 'documentoSearchResult');
+    }
+
+    function consultarPorNome() {
+      const nome = document.getElementById('nomeQuery').value.trim();
+      if (!nome) return showError('nomeResult', 'Informe o nome.');
+      apiCall('POST', '/api/consultar-por-nome', {
+        nome,
+        tipoParte: document.getElementById('nomeTipoParte').value,
+        pagina: parseInt(document.getElementById('nomePagina').value) || 1,
+      }, 'nomeResult');
+    }
+
+    function consultarConteudoDoc() {
+      const proc = document.getElementById('docProcNumero').value.trim();
+      const id = document.getElementById('docId').value.trim();
+      if (!proc || !id) return showError('docResult', 'Informe o processo e ID do documento.');
+      apiCall('POST', '/api/consultar-documento', {
+        numeroProcesso: proc,
+        idDocumento: id,
+      }, 'docResult');
+    }
+
+    function consultarTeor() {
+      const id = document.getElementById('teorId').value.trim();
+      if (!id) return showError('teorResult', 'Informe o identificador do aviso.');
+      apiCall('POST', '/api/consultar-teor-comunicacao', {
+        identificadorAviso: id,
+      }, 'teorResult');
+    }
+
+    function consultarPrecedentes() {
+      const termo = document.getElementById('bnpTermo').value.trim();
+      if (!termo) return showError('precedentesResult', 'Informe o termo de busca.');
+      const body = { termo };
+      const tribunal = document.getElementById('bnpTribunal').value.trim();
+      const especie = document.getElementById('bnpEspecie').value;
+      const dataInicio = document.getElementById('bnpDataInicio').value;
+      const dataFim = document.getElementById('bnpDataFim').value;
+      if (tribunal) body.tribunal = tribunal;
+      if (especie) body.especie = especie;
+      if (dataInicio) body.dataInicio = dataInicio;
+      if (dataFim) body.dataFim = dataFim;
+      apiCall('POST', '/api/consultar-precedentes', body, 'precedentesResult');
+    }
+
+    // Enter key support on inputs
+    document.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const btn = input.closest('.card').querySelector('.btn');
+          if (btn) btn.click();
+        }
+      });
+    });
+
+    // Load initial status
+    fetch(API + '/api/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.credenciaisConfiguradas) {
+          document.getElementById('statusBadge').className = 'status-badge connected';
+          document.getElementById('statusBadge').textContent = 'Configurado';
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
